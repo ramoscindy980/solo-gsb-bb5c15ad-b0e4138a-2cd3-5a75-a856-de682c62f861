@@ -3,6 +3,7 @@ import type { ArgumentNodeData } from './ArgumentNode';
 import type { RoundDecomposition } from '../replay';
 import { SensitivityChart } from './SensitivityChart';
 import { ShapleyWaterfall } from './ShapleyWaterfall';
+import { SnapshotCard, type SnapshotCardProps } from './SnapshotCard';
 import type {
   BottleneckItem,
   BottleneckResult,
@@ -63,6 +64,8 @@ interface SidePanelProps {
   onDeleteSelection: () => void;
   /** 布局整理预览期间：禁止一切图结构 / 属性编辑（锁定切换也不可用，先确认或取消） */
   graphEditingDisabled?: boolean;
+  /** 版本快照：保存 / 列表 / 差异预览 / 整体恢复 */
+  snapshots: SnapshotCardProps;
   sensitivity: {
     selection: SensitivitySelection;
     onSelectionChange: (patch: Partial<SensitivitySelection>) => void;
@@ -257,6 +260,7 @@ export function SidePanel({
   onUpdateEdge,
   onDeleteSelection,
   graphEditingDisabled = false,
+  snapshots,
   sensitivity,
   trace,
   shapley,
@@ -270,6 +274,8 @@ export function SidePanel({
 
   return (
     <aside className="side-panel">
+      <SnapshotCard {...snapshots} />
+
       <section className="panel-card">
         <h2>传播参数</h2>
         {optionLabels.map((item) => (

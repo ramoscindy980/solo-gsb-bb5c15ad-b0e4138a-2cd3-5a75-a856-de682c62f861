@@ -6,6 +6,8 @@ import type {
   ReversalPlanResult,
   SensitivityResult,
   ShapleyResult,
+  SnapshotRecord,
+  SnapshotSummary,
   TraceResult
 } from '../../shared/graph';
 
@@ -25,6 +27,18 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(graph)
   }),
+  /** 版本快照：按创建时间倒序列出全部快照摘要（不含图数据）。 */
+  listSnapshots: () => request<{ snapshots: SnapshotSummary[] }>('/api/snapshots'),
+  /** 版本快照：把当前画布图整体保存为只读快照。 */
+  createSnapshot: (payload: { name: string; graph: GraphDocument }) =>
+    request<{ snapshot: SnapshotSummary }>('/api/snapshots', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  /** 版本快照：读取完整快照（含只读图数据），用于预览差异与恢复。 */
+  getSnapshot: (id: string) => request<{ snapshot: SnapshotRecord }>(`/api/snapshots/${id}`),
+  /** 版本快照：删除指定快照（不影响当前图）。 */
+  deleteSnapshot: (id: string) => request<{ ok: boolean }>(`/api/snapshots/${id}`, { method: 'DELETE' }),
   propagate: (options: PropagateOptions) =>
     request<{ result: PropagateResult }>('/api/propagate', {
       method: 'POST',

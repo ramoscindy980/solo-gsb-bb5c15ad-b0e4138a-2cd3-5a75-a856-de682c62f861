@@ -1,14 +1,29 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { GraphDocument } from '../shared/graph.js';
+import { randomUUID } from 'node:crypto';
+import type { GraphDocument, SnapshotRecord, SnapshotSummary } from '../shared/graph.js';
 
 const EMPTY_GRAPH: GraphDocument = { version: 1, name: '我的论证图', nodes: [], edges: [] };
+
+/** 快照数量上限：防止列表无限增长，达到后需先删除旧快照。 */
+const SNAPSHOT_LIMIT = 100;
 
 export interface GraphStore {
   getGraph(): GraphDocument;
   replaceGraph(graph: GraphDocument): GraphDocument;
+  listSnapshots(): SnapshotSummary[];
+  createSnapshot(name: string, graph: GraphDocument): SnapshotSummary;
+  getSnapshot(id: string): SnapshotRecord | null;
+  deleteSnapshot(id: string): boolean;
   close(): void;
+}
+
+interface SnapshotRow {
+  id: string;
+  name: string;
+  created_at: string;
+  graph_json: string;
 }
 
 export function createGraphStore(databasePath: string): GraphStore {
@@ -47,6 +62,13 @@ export function createGraphStore(databasePath: string): GraphStore {
 
     CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
     CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
+
+    CREATE TABLE IF NOT EXISTS snapshots (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      graph_json TEXT NOT NULL
+    );
   `);
 
   // 旧版本数据库没有 position_locked 列：幂等补列，已有节点默认未锁定。
@@ -139,9 +161,59 @@ export function createGraphStore(databasePath: string): GraphStore {
   const count = db.prepare('SELECT COUNT(*) AS count FROM graph_meta').get() as { count: number };
   if (count.count === 0) replaceGraph(EMPTY_GRAPH);
 
+  // 快照为只读：创建后只提供读取 / 删除，绝不提供更新接口。
+  const rowToSummary = (row: SnapshotRow): SnapshotSummary => {
+    const graph = JSON.parse(row.graph_json) as GraphDocument;
+    return {
+      id: row.id,
+      name: row.name,
+      createdAt: row.created_at,
+      nodeCount: graph.nodes.length,
+      edgeCount: graph.edges.length
+    };
+  };
+
+  const listSnapshots = (): SnapshotSummary[] => {
+    const rows = db
+      .prepare('SELECT id, name, created_at, graph_json FROM snapshots ORDER BY created_at DESC, rowid DESC')
+      .all() as SnapshotRow[];
+    return rows.map(rowToSummary);
+  };
+
+  const createSnapshot = (name: string, graph: GraphDocument): SnapshotSummary => {
+    const total = db.prepare('SELECT COUNT(*) AS count FROM snapshots').get() as { count: number };
+    if (total.count >= SNAPSHOT_LIMIT) {
+      throw new Error(`快照数量已达上限 ${SNAPSHOT_LIMIT} 个，请先删除不再需要的快照。`);
+    }
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    db.prepare('INSERT INTO snapshots (id, name, created_at, graph_json) VALUES (?, ?, ?, ?)').run(
+      id,
+      name,
+      createdAt,
+      JSON.stringify(graph)
+    );
+    return { id, name, createdAt, nodeCount: graph.nodes.length, edgeCount: graph.edges.length };
+  };
+
+  const getSnapshot = (id: string): SnapshotRecord | null => {
+    const row = db
+      .prepare('SELECT id, name, created_at, graph_json FROM snapshots WHERE id = ?')
+      .get(id) as SnapshotRow | undefined;
+    if (!row) return null;
+    return { ...rowToSummary(row), graph: JSON.parse(row.graph_json) as GraphDocument };
+  };
+
+  const deleteSnapshot = (id: string): boolean =>
+    db.prepare('DELETE FROM snapshots WHERE id = ?').run(id).changes > 0;
+
   return {
     getGraph: hydrate,
     replaceGraph: (graph) => replaceGraph(graph) as GraphDocument,
+    listSnapshots,
+    createSnapshot,
+    getSnapshot,
+    deleteSnapshot,
     close: () => db.close()
   };
 }

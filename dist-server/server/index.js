@@ -19,6 +19,15 @@ const store = createGraphStore(databasePath);
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '8mb' }));
+function validateSnapshotName(value) {
+    if (typeof value !== 'string' || !value.trim()) {
+        throw new Error('快照名称不能为空。');
+    }
+    const name = value.trim();
+    if (name.length > 80)
+        throw new Error('快照名称不能超过 80 个字符。');
+    return name;
+}
 app.get('/api/health', (_request, response) => {
     response.json({ ok: true, database: databasePath });
 });
@@ -36,6 +45,40 @@ app.put('/api/graph', (request, response) => {
     catch (error) {
         response.status(400).json({ error: error instanceof Error ? error.message : '无效图数据。' });
     }
+});
+// 版本快照：请求体携带当前画布图与名称，服务端校验后整体只读保存，不提供更新接口。
+app.get('/api/snapshots', (_request, response) => {
+    response.json({ snapshots: store.listSnapshots() });
+});
+app.post('/api/snapshots', (request, response) => {
+    try {
+        const name = validateSnapshotName(request.body?.name);
+        const candidate = request.body?.graph;
+        if (candidate === undefined || candidate === null) {
+            throw new Error('请求体必须携带当前图 graph。');
+        }
+        const graph = validateGraphDocument(candidate);
+        const snapshot = store.createSnapshot(name, graph);
+        response.status(201).json({ snapshot });
+    }
+    catch (error) {
+        response.status(400).json({ error: error instanceof Error ? error.message : '快照保存请求无效。' });
+    }
+});
+app.get('/api/snapshots/:id', (request, response) => {
+    const snapshot = store.getSnapshot(request.params.id);
+    if (!snapshot) {
+        response.status(404).json({ error: '快照不存在或已被删除。' });
+        return;
+    }
+    response.json({ snapshot });
+});
+app.delete('/api/snapshots/:id', (request, response) => {
+    if (!store.deleteSnapshot(request.params.id)) {
+        response.status(404).json({ error: '快照不存在或已被删除。' });
+        return;
+    }
+    response.json({ ok: true });
 });
 app.post('/api/propagate', (request, response) => {
     try {

@@ -1487,6 +1487,158 @@ fieldset.inspector:disabled {
   border-top: 1px dashed #e2e8f0;
 }
 
+/* ---------- 版本快照 ---------- */
+
+.snapshot-card {
+  border-color: #a7f3d0;
+}
+
+.snapshot-save-row {
+  display: flex;
+  gap: 8px;
+}
+
+.snapshot-save-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  background: #fff;
+}
+
+.snapshot-save-row input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+}
+
+.snapshot-save {
+  flex: none;
+  white-space: nowrap;
+}
+
+.snapshot-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshot-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.snapshot-item {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.snapshot-item.active {
+  border-color: var(--blue);
+  background: #eef2ff;
+}
+
+.snapshot-item-name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-item small {
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.snapshot-delete {
+  flex: none;
+  padding: 0 10px;
+  border-color: #fecaca;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.snapshot-delete:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.snapshot-preview {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.snapshot-preview-title {
+  margin: 0 0 6px;
+  color: #475569;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.snapshot-identical {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  background: #f0fdf4;
+  font-size: 12.5px;
+}
+
+.snapshot-name-change {
+  margin: 8px 0 0;
+  color: #92400e;
+  font-size: 12.5px;
+}
+
+.snapshot-diff-group {
+  margin-top: 10px;
+}
+
+.snapshot-diff-group h4 {
+  margin: 0 0 4px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.snapshot-diff-group ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.snapshot-diff-group li {
+  word-break: break-word;
+}
+
+.snapshot-diff-group li small {
+  display: block;
+  color: #94a3b8;
+}
+
+.snapshot-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.snapshot-preview-actions .primary {
+  flex: 1;
+}
+
 @media (max-width: 980px) {
   .topbar {
     align-items: flex-start;

@@ -26,6 +26,7 @@ import {
 import { ReplayBar } from './components/ReplayBar';
 import { buildRoundDecomposition } from './replay';
 import { planGraphLayout, formatDisplacement, type LayoutResult } from './layout';
+import { diffGraphs } from './snapshotDiff';
 import type {
   BottleneckItem,
   BottleneckResult,
@@ -38,6 +39,8 @@ import type {
   ReversalPlanResult,
   SensitivityResult,
   ShapleyResult,
+  SnapshotRecord,
+  SnapshotSummary,
   Stance,
   TraceResult
 } from '../../shared/graph';
@@ -184,6 +187,12 @@ export default function App() {
   const [reversalRunning, setReversalRunning] = useState(false);
   const [reversalStatus, setReversalStatus] = useState('');
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreview | null>(null);
+  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
+  const [snapshotName, setSnapshotName] = useState('');
+  const [snapshotsBusy, setSnapshotsBusy] = useState(false);
+  const [snapshotStatus, setSnapshotStatus] = useState('');
+  // 正在预览差异的完整快照；差异本身由 useMemo 对当前画布实时重算，编辑后不会过期。
+  const [snapshotPreview, setSnapshotPreview] = useState<SnapshotRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   // 供窗口事件监听器读取最新画布，避免监听器闭包过期。
@@ -225,6 +234,10 @@ export default function App() {
         setStatus('已从 SQLite 载入');
       })
       .catch((error: Error) => setStatus(`加载失败：${error.message}`));
+    api
+      .listSnapshots()
+      .then(({ snapshots: list }) => setSnapshots(list))
+      .catch((error: Error) => setSnapshotStatus(`快照列表加载失败：${error.message}`));
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
@@ -550,7 +563,12 @@ export default function App() {
     setPlaying(true);
   };
 
-  const loadDocument = (graph: GraphDocument, immediateSave = true, nextOptions?: PropagateOptions) => {
+  const loadDocument = (
+    graph: GraphDocument,
+    immediateSave = true,
+    nextOptions?: PropagateOptions,
+    saveStatus = { pending: '正在导入…', done: 'JSON 已导入并保存', failed: '导入失败' }
+  ) => {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     const flow = documentToFlow(graph);
     setNodes(flow.nodes);
@@ -572,11 +590,11 @@ export default function App() {
     setReversalSelection(DEFAULT_REVERSAL_SELECTION);
     if (nextOptions) setOptions(nextOptions);
     if (immediateSave) {
-      setStatus('正在导入…');
+      setStatus(saveStatus.pending);
       api
         .saveGraph(graph)
-        .then(() => setStatus('JSON 已导入并保存'))
-        .catch((error: Error) => setStatus(`导入失败：${error.message}`));
+        .then(() => setStatus(saveStatus.done))
+        .catch((error: Error) => setStatus(`${saveStatus.failed}：${error.message}`));
     }
   };
 
@@ -603,6 +621,101 @@ export default function App() {
       setStatus(`导入失败：${error instanceof Error ? error.message : String(error)}`);
     }
   };
+
+  const refreshSnapshots = useCallback(async () => {
+    try {
+      const { snapshots: list } = await api.listSnapshots();
+      setSnapshots(list);
+    } catch (error) {
+      setSnapshotStatus(`快照列表加载失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, []);
+
+  // 保存快照：捕获当前画布（含尚未落库的编辑），服务端校验后整体只读保存。
+  const saveSnapshot = useCallback(async () => {
+    const name = snapshotName.trim();
+    if (!name) {
+      setSnapshotStatus('请先输入快照名称。');
+      return;
+    }
+    setSnapshotsBusy(true);
+    setSnapshotStatus('正在保存快照…');
+    try {
+      await api.createSnapshot({ name, graph: graphToDocument(documentName, nodes, edges) });
+      setSnapshotName('');
+      await refreshSnapshots();
+      setSnapshotStatus(`快照「${name}」已保存为只读版本。`);
+    } catch (error) {
+      setSnapshotStatus(`快照保存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSnapshotsBusy(false);
+    }
+  }, [documentName, edges, nodes, refreshSnapshots, snapshotName]);
+
+  // 预览快照：载入完整快照后，差异由 useMemo 对当前画布实时重算；再次点击同一快照取消预览。
+  const previewSnapshot = useCallback(
+    async (id: string) => {
+      if (snapshotPreview?.id === id) {
+        setSnapshotPreview(null);
+        return;
+      }
+      setSnapshotsBusy(true);
+      setSnapshotStatus('正在载入快照…');
+      try {
+        const { snapshot } = await api.getSnapshot(id);
+        setSnapshotPreview(snapshot);
+        setSnapshotStatus('');
+      } catch (error) {
+        setSnapshotStatus(`快照载入失败：${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        setSnapshotsBusy(false);
+      }
+    },
+    [snapshotPreview]
+  );
+
+  const removeSnapshot = useCallback(
+    async (id: string) => {
+      const target = snapshots.find((item) => item.id === id);
+      if (!window.confirm(`删除快照「${target?.name ?? id}」？该操作不可撤销（不影响当前图）。`)) return;
+      setSnapshotsBusy(true);
+      try {
+        await api.deleteSnapshot(id);
+        setSnapshotPreview((current) => (current?.id === id ? null : current));
+        await refreshSnapshots();
+        setSnapshotStatus('快照已删除。');
+      } catch (error) {
+        setSnapshotStatus(`快照删除失败：${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        setSnapshotsBusy(false);
+      }
+    },
+    [refreshSnapshots, snapshots]
+  );
+
+  // 确认恢复：整体替换当前画布，沿用现有自动保存（立即 PUT /api/graph），传播与各分析结果全部失效。
+  const restoreSnapshot = () => {
+    const snapshot = snapshotPreview;
+    if (!snapshot) return;
+    setSnapshotPreview(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    loadDocument(snapshot.graph, true, undefined, {
+      pending: '正在恢复快照…',
+      done: `已整体恢复快照「${snapshot.name}」并自动保存`,
+      failed: '快照恢复失败'
+    });
+  };
+
+  // 当前画布文档与预览快照的差异：随任何图编辑实时重算，确认恢复前始终准确。
+  const currentDocument = useMemo(
+    () => graphToDocument(documentName, nodes, edges),
+    [documentName, nodes, edges]
+  );
+  const snapshotDiff = useMemo(
+    () => (snapshotPreview ? diffGraphs(currentDocument, snapshotPreview.graph) : null),
+    [currentDocument, snapshotPreview]
+  );
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
@@ -1183,6 +1296,22 @@ export default function App() {
           onUpdateEdge={updateEdge}
           onDeleteSelection={deleteSelection}
           graphEditingDisabled={Boolean(layoutPreview)}
+          snapshots={{
+            list: snapshots,
+            busy: snapshotsBusy,
+            status: snapshotStatus,
+            name: snapshotName,
+            onNameChange: setSnapshotName,
+            onSave: saveSnapshot,
+            onPreview: previewSnapshot,
+            onDelete: removeSnapshot,
+            preview: snapshotPreview,
+            diff: snapshotDiff,
+            currentGraph: currentDocument,
+            onConfirmRestore: restoreSnapshot,
+            onCancelPreview: () => setSnapshotPreview(null),
+            disabled: Boolean(layoutPreview)
+          }}
           nodes={nodes}
           edges={edges}
           sensitivity={{
