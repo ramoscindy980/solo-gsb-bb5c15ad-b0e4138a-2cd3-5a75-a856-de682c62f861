@@ -26,6 +26,7 @@ import {
 import { ReplayBar } from './components/ReplayBar';
 import { buildRoundDecomposition } from './replay';
 import { planGraphLayout, formatDisplacement, type LayoutResult } from './layout';
+import { diffSnapshotWithCurrent } from './snapshots';
 import type {
   BottleneckItem,
   BottleneckResult,
@@ -38,6 +39,8 @@ import type {
   ReversalPlanResult,
   SensitivityResult,
   ShapleyResult,
+  SnapshotRecord,
+  SnapshotSummary,
   Stance,
   TraceResult
 } from '../../shared/graph';
@@ -184,6 +187,11 @@ export default function App() {
   const [reversalRunning, setReversalRunning] = useState(false);
   const [reversalStatus, setReversalStatus] = useState('');
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreview | null>(null);
+  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
+  const [snapshotName, setSnapshotName] = useState('');
+  const [snapshotBusy, setSnapshotBusy] = useState(false);
+  const [snapshotStatus, setSnapshotStatus] = useState('');
+  const [snapshotPreview, setSnapshotPreview] = useState<SnapshotRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   // 供窗口事件监听器读取最新画布，避免监听器闭包过期。
@@ -225,6 +233,10 @@ export default function App() {
         setStatus('已从 SQLite 载入');
       })
       .catch((error: Error) => setStatus(`加载失败：${error.message}`));
+    api
+      .listSnapshots()
+      .then(({ snapshots: list }) => setSnapshots(list))
+      .catch((error: Error) => setSnapshotStatus(`快照列表加载失败：${error.message}`));
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
@@ -603,6 +615,113 @@ export default function App() {
       setStatus(`导入失败：${error instanceof Error ? error.message : String(error)}`);
     }
   };
+
+  // 当前画布图文档：快照保存与差异预览共用的数据源。
+  const currentGraph = useMemo(
+    () => graphToDocument(documentName, nodes, edges),
+    [documentName, nodes, edges]
+  );
+
+  // 预览中的快照与当前画布的差异：画布的任何编辑都会自动刷新该差异。
+  const snapshotDiff = useMemo(
+    () => (snapshotPreview ? diffSnapshotWithCurrent(snapshotPreview.graph, currentGraph) : null),
+    [snapshotPreview, currentGraph]
+  );
+
+  // 保存快照：把当前画布整体存为只读副本（提交图副本，不改动当前图的持久化）。
+  const saveSnapshot = useCallback(async () => {
+    if (snapshotBusy || previewRef.current) return;
+    const name = snapshotName.trim() || `快照 ${new Date().toLocaleString('zh-CN', { hour12: false })}`;
+    setSnapshotBusy(true);
+    setSnapshotStatus('正在保存快照…');
+    try {
+      const { snapshot } = await api.createSnapshot({ name, graph: currentGraph });
+      const summary: SnapshotSummary = {
+        id: snapshot.id,
+        name: snapshot.name,
+        createdAt: snapshot.createdAt,
+        nodeCount: snapshot.nodeCount,
+        edgeCount: snapshot.edgeCount
+      };
+      setSnapshots((current) => [summary, ...current]);
+      setSnapshotName('');
+      setSnapshotStatus(
+        `快照「${snapshot.name}」已保存：${snapshot.nodeCount} 个节点、${snapshot.edgeCount} 条连线。`
+      );
+    } catch (error) {
+      setSnapshotStatus(`快照保存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSnapshotBusy(false);
+    }
+  }, [currentGraph, snapshotBusy, snapshotName]);
+
+  // 点击列表项：载入快照完整图数据并进入差异预览；再次点击当前项取消预览。
+  const toggleSnapshotPreview = useCallback(
+    async (id: string) => {
+      if (snapshotPreview?.id === id) {
+        setSnapshotPreview(null);
+        return;
+      }
+      setSnapshotBusy(true);
+      setSnapshotStatus('正在载入快照…');
+      try {
+        const { snapshot } = await api.getSnapshot(id);
+        setSnapshotPreview(snapshot);
+        setSnapshotStatus('');
+      } catch (error) {
+        setSnapshotPreview(null);
+        setSnapshotStatus(`快照载入失败：${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        setSnapshotBusy(false);
+      }
+    },
+    [snapshotPreview]
+  );
+
+  // 确认恢复：整体替换当前画布，沿用现有自动保存（PUT /api/graph）写回 SQLite，
+  // 并使传播、回放与各分析结果全部失效（与任何图编辑同一规则）。
+  const restoreSnapshot = useCallback(() => {
+    const snapshot = snapshotPreview;
+    if (!snapshot || previewRef.current) return;
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    const flow = documentToFlow(snapshot.graph);
+    setNodes(flow.nodes);
+    setEdges(flow.edges);
+    setDocumentName(snapshot.graph.name ?? '我的论证图');
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setResult(null);
+    setReplayRound(0);
+    setPlaying(false);
+    setLayoutPreview(null);
+    previewOriginRef.current = null;
+    invalidateSensitivity();
+    setSensitivitySelection({ edgeId: '', targetNodeId: '' });
+    invalidateTrace();
+    setTraceSelection(DEFAULT_TRACE_SELECTION);
+    invalidateShapley();
+    setShapleySelection(DEFAULT_SHAPLEY_SELECTION);
+    invalidateBottleneck();
+    setBottleneckSelection(DEFAULT_BOTTLENECK_SELECTION);
+    invalidateReversal();
+    setReversalSelection(DEFAULT_REVERSAL_SELECTION);
+    setSnapshotPreview(null);
+    setSnapshotStatus('');
+    setStatus('正在恢复快照…');
+    api
+      .saveGraph(snapshot.graph)
+      .then(() => setStatus(`快照「${snapshot.name}」已恢复并自动保存`))
+      .catch((error: Error) => setStatus(`快照恢复失败：${error.message}`));
+  }, [
+    snapshotPreview,
+    setNodes,
+    setEdges,
+    invalidateSensitivity,
+    invalidateTrace,
+    invalidateShapley,
+    invalidateBottleneck,
+    invalidateReversal
+  ]);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
@@ -1243,6 +1362,20 @@ export default function App() {
             onApply: applyReversalPlan,
             onClose: invalidateReversal,
             graphEditingDisabled: Boolean(layoutPreview)
+          }}
+          snapshot={{
+            snapshots,
+            name: snapshotName,
+            onNameChange: setSnapshotName,
+            busy: snapshotBusy,
+            status: snapshotStatus,
+            preview: snapshotPreview,
+            diff: snapshotDiff,
+            graphEditingDisabled: Boolean(layoutPreview),
+            onSave: saveSnapshot,
+            onTogglePreview: toggleSnapshotPreview,
+            onCancelPreview: () => setSnapshotPreview(null),
+            onRestore: restoreSnapshot
           }}
         />
       </main>

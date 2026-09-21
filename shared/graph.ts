@@ -74,6 +74,24 @@ export interface GraphApiResponse {
   graph: GraphDocument;
 }
 
+/** 版本快照摘要：侧栏列表展示用（不含图数据） */
+export interface SnapshotSummary {
+  id: string;
+  /** 用户命名（或自动命名）的快照名称 */
+  name: string;
+  /** 创建时间（ISO 时间戳），列表按它倒序排列 */
+  createdAt: string;
+  /** 快照内节点数量 */
+  nodeCount: number;
+  /** 快照内连线数量 */
+  edgeCount: number;
+}
+
+/** 版本快照完整记录：含只读图数据，用于预览与当前画布的差异以及整体恢复 */
+export interface SnapshotRecord extends SnapshotSummary {
+  graph: GraphDocument;
+}
+
 /** 边权敏感性扫描中单个边权取值点的计算状态 */
 export type SensitivityPointStatus = 'converged' | 'oscillating' | 'limit';
 

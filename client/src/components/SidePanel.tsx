@@ -3,6 +3,7 @@ import type { ArgumentNodeData } from './ArgumentNode';
 import type { RoundDecomposition } from '../replay';
 import { SensitivityChart } from './SensitivityChart';
 import { ShapleyWaterfall } from './ShapleyWaterfall';
+import { SnapshotCard, type SnapshotCardProps } from './SnapshotCard';
 import type {
   BottleneckItem,
   BottleneckResult,
@@ -125,6 +126,8 @@ interface SidePanelProps {
     /** 布局整理预览期间：禁止应用调权（任何图编辑都会使预览失效，需先确认或取消） */
     graphEditingDisabled?: boolean;
   };
+  /** 版本快照：保存 / 列表 / 预览差异 / 整体恢复 */
+  snapshot: SnapshotCardProps;
   nodes: Node<ArgumentNodeData>[];
   edges: Edge[];
 }
@@ -262,6 +265,7 @@ export function SidePanel({
   shapley,
   bottleneck,
   reversal,
+  snapshot,
   nodes,
   edges
 }: SidePanelProps) {
@@ -386,6 +390,8 @@ export function SidePanel({
           <p className="hint">点击节点或连线进行编辑；从节点右侧圆点拖出即可连线。</p>
         )}
       </section>
+
+      <SnapshotCard {...snapshot} />
 
       <SensitivityCard
         sensitivity={sensitivity}

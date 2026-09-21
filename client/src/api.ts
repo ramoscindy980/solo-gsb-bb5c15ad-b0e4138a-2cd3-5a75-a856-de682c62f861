@@ -6,6 +6,8 @@ import type {
   ReversalPlanResult,
   SensitivityResult,
   ShapleyResult,
+  SnapshotRecord,
+  SnapshotSummary,
   TraceResult
 } from '../../shared/graph';
 
@@ -81,5 +83,15 @@ export const api = {
     request<{ plan: ReversalPlanResult }>('/api/reversal/conclusion-flip', {
       method: 'POST',
       body: JSON.stringify(payload)
-    })
+    }),
+  /** 版本快照：按创建时间倒序列出全部快照摘要。 */
+  listSnapshots: () => request<{ snapshots: SnapshotSummary[] }>('/api/snapshots'),
+  /** 版本快照：把当前画布图整体保存为只读快照（提交图副本，不影响当前图的持久化）。 */
+  createSnapshot: (payload: { name: string; graph: GraphDocument }) =>
+    request<{ snapshot: SnapshotRecord }>('/api/snapshots', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  /** 版本快照：读取单个快照的完整图数据，用于预览与当前图的差异。 */
+  getSnapshot: (id: string) => request<{ snapshot: SnapshotRecord }>(`/api/snapshots/${encodeURIComponent(id)}`)
 };

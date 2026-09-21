@@ -3,7 +3,7 @@ import cors from 'cors';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import { createGraphStore } from './db.js';
+import { createGraphStore, validateSnapshotName } from './db.js';
 import { propagateBeliefs, validateGraphDocument, validateOptions } from './propagation.js';
 import {
   scanEdgeWeightSensitivity,
@@ -162,6 +162,37 @@ app.post('/api/reversal/conclusion-flip', (request, response) => {
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : '结论翻转方案请求无效。' });
   }
+});
+
+// 版本快照：按创建时间倒序列出全部快照摘要（不含图数据）。
+app.get('/api/snapshots', (_request, response) => {
+  response.json({ snapshots: store.listSnapshots() });
+});
+
+// 版本快照：把请求体携带的当前画布图整体保存为只读快照（不影响持久化的当前图）。
+app.post('/api/snapshots', (request, response) => {
+  try {
+    const name = validateSnapshotName(request.body?.name);
+    const candidate = request.body?.graph;
+    if (candidate === undefined || candidate === null) {
+      throw new Error('请求体必须携带当前图 graph（快照只保存副本，不会改动当前图）。');
+    }
+    const graph = validateGraphDocument(candidate);
+    const snapshot = store.createSnapshot(name, graph);
+    response.status(201).json({ snapshot });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : '快照保存请求无效。' });
+  }
+});
+
+// 版本快照：读取单个快照的完整图数据，用于前端预览与当前图的差异。
+app.get('/api/snapshots/:id', (request, response) => {
+  const snapshot = store.getSnapshot(request.params.id);
+  if (!snapshot) {
+    response.status(404).json({ error: '快照不存在。' });
+    return;
+  }
+  response.json({ snapshot });
 });
 
 if (existsSync(staticDirectory)) {

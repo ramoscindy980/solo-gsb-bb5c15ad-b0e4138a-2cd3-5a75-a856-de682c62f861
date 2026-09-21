@@ -1487,6 +1487,216 @@ fieldset.inspector:disabled {
   border-top: 1px dashed #e2e8f0;
 }
 
+/* ---------- 版本快照 ---------- */
+
+.snapshot-card {
+  border-color: #bae6fd;
+}
+
+.snapshot-save-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.snapshot-save-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  background: #fff;
+  font-size: 13px;
+}
+
+.snapshot-save-row input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+}
+
+.snapshot-save-row button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.snapshot-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshot-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  box-shadow: none;
+}
+
+.snapshot-item:hover:not(:disabled) {
+  border-color: #38bdf8;
+  background: #f0f9ff;
+}
+
+.snapshot-item.active {
+  border-color: #0284c7;
+  border-width: 2px;
+  padding: 8px 9px;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 3px rgb(2 132 199 / 12%);
+}
+
+.snapshot-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.snapshot-item-name {
+  min-width: 0;
+  color: #0c4a6e;
+  word-break: break-word;
+}
+
+.snapshot-item-counts {
+  flex: none;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.snapshot-item-time {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.snapshot-preview {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.snapshot-diff {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.snapshot-diff-summary {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #0c4a6e;
+  background: #f0f9ff;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.snapshot-diff-identical {
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #166534;
+  background: #f0fdf4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.snapshot-diff-group {
+  display: grid;
+  gap: 5px;
+}
+
+.snapshot-diff-title {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.snapshot-diff-title.added {
+  color: #15803d;
+}
+
+.snapshot-diff-title.removed {
+  color: #b91c1c;
+}
+
+.snapshot-diff-title.changed {
+  color: #b45309;
+}
+
+.snapshot-diff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.snapshot-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.snapshot-chip.added {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.snapshot-chip.removed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.snapshot-diff-change-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshot-diff-change-list li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.snapshot-diff-change-list li strong {
+  color: #78350f;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.snapshot-diff-change-list li small {
+  color: #92400e;
+}
+
+.snapshot-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.snapshot-preview-actions button {
+  flex: 1 1 auto;
+}
+
 @media (max-width: 980px) {
   .topbar {
     align-items: flex-start;
